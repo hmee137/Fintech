@@ -5,26 +5,23 @@ Fintech Midterm - Phan A
 Author: Phu Thien
 ============================================================
 
-LIEN HE BAI GIANG:
-    - Bai 7.3.1: Trich xuat tin hieu Alpha tu Market Data
-                 (Momentum, Realized Volatility, Volume spike)
-    - Bai 7.3.2: Portfolio of Alphas - ket hop nhieu tin hieu
-                 doc lap thanh tin hieu tong hop manh hon.
-    - Bai 7.4.1: Chien luoc giao dich thuat toan co ban
-                 (Mean Reversion voi Bollinger, Momentum voi EMA)
+LIÊN HỆ BÀI GIẢNG:
+    - Bai 7.3.1: Trích xuất tín hiệu Alpha từ Market Data (Momentum, Realized Volatility, Volume spike)
+    - Bai 7.3.2: Portfolio of Alphas - kết hợp nhiều tín hiệu độc lập thành tín hiệu tổng hợp mạnh hơn.
+    - Bai 7.4.1: Chiến lược giao dịch thuật toán cơ bản (Mean Reversion với Bollinger, Momentum với EMA)
 
-LOGIC TIN HIEU:
-    Bot khong dua ra 1 tin hieu don le, ma TONG HOP 4 tin hieu:
-        (1) Xu huong (Trend)        : EMA9 vs EMA21
-        (2) Dong luong (Momentum)   : MACD cat tin hieu
-        (3) Qua mua/ban (Oscillator): RSI
-        (4) Khoi luong (Volume)     : so voi SMA20 cua volume
+LOGIC TÍN HIỆU:
+    Bot không đưa ra 1 tín hiệu đơn lẻ, mà TỔNG HỢP 4 tín hiệu:
+        (1) Xu hướng (Trend)        : EMA9 vs EMA21
+        (2) Động lượng (Momentum)   : MACD cắt tín hiệu
+        (3) Qua mua/bán (Oscillator): RSI
+        (4) Khối lượng (Volume)     : so với SMA20 của volume
 
-    -> Ra quyet dinh tong hop:
+    -> Ra quyết định tổng hợp:
         STRONG_BUY / BUY / CONSIDER_BUY / SIDEWAYS
         CONSIDER_SELL / SELL / STRONG_SELL
 
-CHAY:
+CHẠY:
     python robo_advisor_bot_v2.py
 """
 
@@ -40,13 +37,13 @@ from datetime import datetime, timezone, timedelta
 # ============================================================
 
 # --- Telegram ---
-TELEGRAM_TOKEN = "8689397744:AAF6gw6JFpjpevd3sjlJZ4zy1N5-7TkF7xQ"
-TELEGRAM_CHAT_ID = "8596078554"
+TELEGRAM_TOKEN   = "PASTE_YOUR_BOT_TOKEN_HERE"
+TELEGRAM_CHAT_ID = "PASTE_YOUR_CHAT_ID_HERE"
 
 # --- Whitelist dung dinh dang Bitget: {TICKER}ONUSDT ---
-# Toan bo 54 token tokenized stocks trong de thi (Muc A.5)
 WATCHLIST = [
-    "NVDAONUSDT", "BTCUSDT", "XAUTUSDT"
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "XAUUSDT",
+    "AAPLONUSDT", "MSFTONUSDT", "GOOGONUSDT", "AMZONUSDT", "TSLAONUSDT",
 ]
 
 # --- Tham so ---
@@ -76,7 +73,7 @@ VN_TZ = timezone(timedelta(hours=7))
 BITGET_BASE = "https://api.bitget.com"
 
 def fetch_symbols():
-    """Lay danh sach tat ca symbol spot tren Bitget."""
+    """Lấy danh sách tất cả symbol spot trên Bitget."""
     try:
         r = requests.get(f"{BITGET_BASE}/api/v2/spot/public/symbols", timeout=10)
         return {item["symbol"] for item in r.json().get("data", [])}
@@ -87,7 +84,7 @@ def fetch_symbols():
 
 def fetch_candles(symbol, granularity="15min", limit=100):
     """
-    Lay nen OHLCV tu Bitget.
+    Lấy nến OHLCV từ Bitget.
     Response format: [ts_ms, open, high, low, close, baseVol, quoteVol, usdtVol]
     """
     url = f"{BITGET_BASE}/api/v2/spot/market/candles"
@@ -113,20 +110,20 @@ def fetch_candles(symbol, granularity="15min", limit=100):
 
 
 # ============================================================
-# [3] INDICATORS  (tham chieu Bai 7.3.1 + 7.4.1)
+# [3] INDICATORS  (tham chiếu Bài 7.3.1 + 7.4.1)
 # ============================================================
 
 def compute_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     """RSI = 100 - 100/(1+RS),  RS = avg_gain/avg_loss trong 'period' nen."""
-    delta = close.diff() #thay đổi giá giữa các nến liên tiếp   
-    gain = delta.where(delta > 0, 0.0).rolling(period).mean() #tính trung bình cộng của các giá trị tăng dương trong khoảng thời gian 'period'
-    loss = (-delta.where(delta < 0, 0.0)).rolling(period).mean() #tính trung bình cộng của các giá trị giảm âm trong khoảng thời gian 'period'
-    rs = gain / loss.replace(0, np.nan) #tính tỷ lệ RS, thay thế các giá trị mất định nghĩa (do chia cho 0) bằng NaN để tránh lỗi
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0.0).rolling(period).mean()
+    loss = (-delta.where(delta < 0, 0.0)).rolling(period).mean()
+    rs = gain / loss.replace(0, np.nan)
     return 100 - (100 / (1 + rs))
 
 
 def compute_ema(close: pd.Series, period: int) -> pd.Series:
-    """EMA - trung binh dong theo trong so mu."""
+    """EMA - trung bình động theo số mũ."""
     return close.ewm(span=period, adjust=False).mean()
 
 
@@ -135,7 +132,7 @@ def compute_macd(close: pd.Series, fast=12, slow=26, signal=9):
     MACD = EMA(fast) - EMA(slow)
     Signal = EMA(MACD, signal)
     Histogram = MACD - Signal
-    Khi MACD cat LEN Signal -> momentum tang.
+    Khi MACD cắt LÊN Signal -> momentum tăng.
     """
     macd = compute_ema(close, fast) - compute_ema(close, slow)
     sig  = compute_ema(macd, signal)
@@ -151,22 +148,22 @@ def compute_bollinger(close: pd.Series, period=20, num_std=2.0):
 
 
 # ============================================================
-# [4] SIGNAL AGGREGATION  (tham chieu Bai 7.3.2 - Portfolio of Alphas)
+# [4] SIGNAL AGGREGATION  (tham chiếu Bài 7.3.2 - Portfolio of Alphas)
 # ============================================================
 
 def classify_signal(price, ema9, ema21, rsi_val, macd_cross, vol_ratio):
     """
-    Ket hop 4 Alpha doc lap -> 1 tin hieu tong hop.
+     Kết hợp 4 Alpha độc lập -> 1 tín hiệu tổng hợp.
 
-    Alpha 1: Trend        (vi tri gia vs EMA9 vs EMA21)
+    Alpha 1: Trend        (vị trí giá vs EMA9 vs EMA21)
     Alpha 2: Momentum     (MACD cross)
     Alpha 3: Oscillator   (RSI)
-    Alpha 4: Volume       (vol so voi SMA20 cua vol)
+    Alpha 4: Volume       (vol so với SMA20 của vol)
 
-    Logic dua vao vi tri gia:
+    Logic dựa vào vị trí giá:
         price > EMA9 > EMA21  -> UPTREND
         price < EMA9 < EMA21  -> DOWNTREND
-        price > EMA9, EMA9<EMA21 hoac nguoc lai -> TRANSITION
+        price > EMA9, EMA9<EMA21 hoặc ngược lại -> TRANSITION
     """
     # --- Xep hang Trend ---
     if price > ema9 > ema21:
@@ -180,13 +177,13 @@ def classify_signal(price, ema9, ema21, rsi_val, macd_cross, vol_ratio):
     else:
         base = "SIDEWAYS"
 
-    # --- Nang cap len STRONG neu co xac nhan ---
+    # --- Nâng cấp thành STRONG nếu có xác nhận ---
     if base == "UPTREND" and macd_cross == "GOLDEN" and rsi_val < 70:
         return "STRONG_BUY"
     if base == "DOWNTREND" and macd_cross == "DEATH" and rsi_val > 30:
         return "STRONG_SELL"
 
-    # --- Canh bao dao chieu khi RSI cuc doan ---
+    # --- Cảnh báo đảo chiều khi RSI cực đoan ---
     if base == "UPTREND" and rsi_val > 75:
         return "OVERBOUGHT_RISK"
     if base == "DOWNTREND" and rsi_val < 25:
@@ -195,38 +192,38 @@ def classify_signal(price, ema9, ema21, rsi_val, macd_cross, vol_ratio):
     return base
 
 
-# Mapping tin hieu -> emoji + text + action
+# Mapping tín hiệu -> emoji + text + action
 SIGNAL_DISPLAY = {
     "STRONG_BUY":      ("🟢", "MUA MẠNH (STRONG BUY)",
-                        "Tất cả các chỉ báo xác nhận xu hướng tăng. Có thể vào lệnh với size chuẩn."),
+                        "Tất cả chủ báo xác nhận xu hướng tăng. Có thể vào lệnh với size chuẩn."),
     "UPTREND":         ("📈", "XU HƯỚNG TĂNG (UPTREND)",
-                        "Giá cao trên cả EMA9 và EMA21. Xu hướng tích cực, theo trend."),
-    "CONSIDER_BUY":    ("🟡", "XEM XÉT MUA",
-                        "Giá bắt đầu vượt lên EMA9. Chờ xác nhận để vào lệnh."),
-    "SIDEWAYS":        ("⚪", "ĐI NGANG (SIDEWAYS)",
+                        "Giá trên cả EMA9 và EMA21. Xu hướng tích cực, theo trend."),
+    "CONSIDER_BUY":    ("🟡", "XEM XET MUA",
+                        "Giá bắt đầu vượt lên EMA9. Cho xác nhận để vào lệnh."),
+    "SIDEWAYS":        ("⚪", "DI NGANG (SIDEWAYS)",
                         "Thị trường không có xu hướng rõ. Tránh vào lệnh trend-following."),
-    "CONSIDER_SELL":   ("🟠", "XEM XÉT BÁN",
-                        "Giá bắt đầu rơi dưới EMA9. Cần thận trọng nếu đang giữ vị thế."),
+    "CONSIDER_SELL":   ("🟠", "XEM XET BÁN",
+                        "Giá đang ở dưới EMA9. Cẩn trọng nếu đang giữ vị thế."),
     "DOWNTREND":       ("📉", "XU HƯỚNG GIẢM (DOWNTREND)",
-                        "Giá nằm dưới các đường trung bình. Nguy hiểm, không nên GIAO DỊCH."),
+                        "Giá nằm dưới các đường trung bình. Nguy hiểm, KHÔNG NÊN vào lệnh."),
     "STRONG_SELL":     ("🔴", "BÁN MẠNH (STRONG SELL)",
-                        "Tất cả các chỉ báo xác nhận xu hướng giảm. Cần thoát vị thế."),
-    "OVERBOUGHT_RISK": ("⚠️", "CẢNH BÁO QUÁ MUA",
-                        "RSI > 75. Nguy cơ đảo chiều giảm, giảm tham gia mua them."),
-    "OVERSOLD_RISK":   ("⚠️", "CẢNH BÁO QUÁ BÁN",
+                        "Tất cả chỉ báo xác nhận xu hướng giảm. Cần thoát vị thế."),
+    "OVERBOUGHT_RISK": ("⚠️", "CANH BAO QUA MUA",
+                        "RSI > 75. Nguy cơ đảo chiều giảm, giảm tham gia mua thêm."),
+    "OVERSOLD_RISK":   ("⚠️", "CANH BAO QUA BAN",
                         "RSI < 25. Có thể hồi nhưng rủi ro cao, chờ xác nhận."),
 }
 
 
 def analyze(df: pd.DataFrame):
-    """Nhan DataFrame OHLCV -> tra ve dict cac chi so + tin hieu tong hop."""
+    """Nhận DataFrame OHLCV -> trả về dict các chỉ số + tín hiệu tổng hợp."""
     if df is None or len(df) < max(MACD_SLOW, BB_PERIOD, EMA_SLOW) + 5:
         return None
 
     close  = df["close"]
     volume = df["baseVol"]
 
-    # --- Tinh cac chi bao ---
+    # --- Tính các chỉ báO ---
     rsi = compute_rsi(close, RSI_PERIOD)
     ema_fast_s = compute_ema(close, EMA_FAST)
     ema_slow_s = compute_ema(close, EMA_SLOW)
@@ -234,7 +231,7 @@ def analyze(df: pd.DataFrame):
     upper, mid, lower = compute_bollinger(close, BB_PERIOD, BB_STD)
     vol_sma = volume.rolling(VOL_SMA_PERIOD).mean()
 
-    # --- Gia tri hien tai ---
+    # --- Giá trị hiện tại ---
     last, prev = -1, -2
     price   = float(close.iloc[last])
     rsi_val = float(rsi.iloc[last])
@@ -244,7 +241,7 @@ def analyze(df: pd.DataFrame):
     vol_ma  = float(vol_sma.iloc[last])
     vol_ratio = vol / vol_ma if vol_ma > 0 else 0.0
 
-    # Bien dong % so voi nen truoc
+    # Biến động % so với nến trước đó
     change_pct = (price / float(close.iloc[prev]) - 1) * 100
 
     # MACD cross
@@ -255,7 +252,7 @@ def analyze(df: pd.DataFrame):
     else:
         macd_cross = "NONE"
 
-    # Phan loai tin hieu tong hop
+    # Phân loại tín hiệu tổng hợp
     signal = classify_signal(price, ema9, ema21, rsi_val, macd_cross, vol_ratio)
 
     return {
@@ -275,22 +272,22 @@ def analyze(df: pd.DataFrame):
 
 
 # ============================================================
-# [5] TELEGRAM  (format giong anh mau)
+# [5] TELEGRAM  
 # ============================================================
 
 def format_message(symbol: str, data: dict) -> str:
-    """Dong goi thong tin phan tich thanh message HTML cho Telegram."""
+    """Đóng gói thông tin phân tích thành message HTML cho Telegram."""
     emoji, title, action = SIGNAL_DISPLAY[data["signal"]]
     vn_now = datetime.now(VN_TZ).strftime("%H:%M:%S - %d/%m/%Y")
 
-    # Them dau hieu MACD cross neu co
+    # Thêm dấu hiệu MACD cross nếu có
     macd_note = ""
     if data["macd_cross"] == "GOLDEN":
         macd_note = "\n✨ <b>MACD Golden Cross</b> (momentum tăng)"
     elif data["macd_cross"] == "DEATH":
         macd_note = "\n💀 <b>MACD Death Cross</b> (momentum giảm)"
 
-    # Them canh bao volume spike
+    # Thêm cảnh báo volume spike
     vol_note = ""
     if data["vol_ratio"] > 2.0:
         vol_note = "\n🔥 <b>Volume bất thường</b> (> 2x trung bình)"
@@ -310,12 +307,12 @@ def format_message(symbol: str, data: dict) -> str:
         f"{macd_note}"
         f"{vol_note}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"👉 <b>HÀNH ĐỘNG:</b> {action}"
+        f"👉 <b>HÀNH ĐỘNGG:</b> {action}"
     )
 
 
 def send_telegram(text: str) -> bool:
-    url = f"https://api.telegram.org/bot8689397744:AAF6gw6JFpjpevd3sjlJZ4zy1N5-7TkF7xQ/sendMessage"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": text,
@@ -360,8 +357,8 @@ def main():
     # 2) Thong bao online
     send_telegram(
         "🚀 <b>Robo-Advisor v2.0 ONLINE</b>\n"
-        f"📋 Theo dõi: <b>{len(valid)} tokenized stocks</b>\n"
-        f"⏱ Timeframe: {TIMEFRAME} | Quet moi {CHECK_INTERVAL}s\n"
+        f"📋 Theo dõi <b>{len(valid)} tokenized stocks</b>\n"
+        f"⏱ Timeframe: {TIMEFRAME} | Quét mỗi {CHECK_INTERVAL}s\n"
         f"🧠 Logic: Portfolio of Alphas (Trend + MACD + RSI + Volume)"
     )
 
