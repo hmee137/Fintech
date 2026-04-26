@@ -7,7 +7,7 @@ Bot cho **Phần A** của đề thi Fintech. Kết nối Bitget API → tính R
 ## 1. Cài đặt thư viện
 
 ```bash
-pip install requests pandas numpy
+pip install -r Requirements.txt
 ```
 
 ## 2. Tạo Telegram Bot 
@@ -51,7 +51,7 @@ print(stocks)
 ## 4. Chạy bot
 
 ```bash
-python robo_advisor_bot.py
+python robo_advisor_bot_v2.py
 ```
 
 Bạn sẽ nhận tin nhắn `🚀 Robo-Advisor online` ngay. Sau đó cứ mỗi 60 giây bot sẽ quét và chỉ gửi tin khi **có tín hiệu mới** (chống spam).
