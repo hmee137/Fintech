@@ -1,7 +1,7 @@
 """
 ============================================================
 ROBO-ADVISOR TELEGRAM BOT  v2.0
-Fintech Midterm - Phan A
+Fintech Midterm - Phần A
 Author: Phu Thien
 ============================================================
 
